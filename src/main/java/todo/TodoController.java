@@ -12,6 +12,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.tinylog.Logger;
+import javafx.scene.control.Button;
 
 import java.io.IOException;
 
@@ -51,6 +52,11 @@ public class TodoController {
 
         CheckBox checkBox = new CheckBox();
         TextField textField = new TextField();
+        Button deleteButton = new Button("🗑");
+
+        deleteButton.setOnAction(event -> {
+            todoModel.getTasks().remove(item);
+        });
 
         checkBox.selectedProperty().bindBidirectional(item.doneProperty());
         textField.textProperty().bindBidirectional(item.textProperty());
@@ -59,7 +65,7 @@ public class TodoController {
                 .then("-fx-strikethrough: true; -fx-text-fill: gray;")
                 .otherwise("-fx-strikethrough: false; -fx-text-fill: black;"));
 
-        row.getChildren().addAll(checkBox, textField);
+        row.getChildren().addAll(checkBox, textField, deleteButton);
         return row;
     }
 
@@ -68,7 +74,17 @@ public class TodoController {
         var alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("About");
         alert.setHeaderText("Javafx to-do api");
-        alert.setContentText("Tasks can be added using \"Add Task\" under the \"Edit\" menu. When a task is checked and the file is saved, the completed task will be removed.");
+        alert.setContentText("""
+        A lightweight task manager built with JavaFX.
+        
+        Features:
+        - Add, complete, and delete tasks
+        - Save and open task lists from files
+        - Automatic cleanup of completed tasks upon saving
+        
+        Created by: András Gergő Székely
+        Version: 1.1.0
+        """);
         alert.showAndWait();
     }
 
