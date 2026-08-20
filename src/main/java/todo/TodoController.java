@@ -3,16 +3,13 @@ package todo;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.fxml.FXML;
-import javafx.scene.control.Alert;
-import javafx.scene.control.CheckBox;
-import javafx.scene.control.TextField;
+import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.tinylog.Logger;
-import javafx.scene.control.Button;
 
 import java.io.IOException;
 
@@ -95,6 +92,13 @@ public class TodoController {
 
     @FXML
     private void onAddTask() {
+        for (TodoItem item : todoModel.getTasks()) {
+            if (item.getText() == null || item.getText().isBlank()) {
+                showWarning("Empty Task",
+                        "There is already an incomplete task. Please complete or remove it before adding a new one.");
+                return;
+            }
+        }
         todoModel.addTask();
     }
 
@@ -109,7 +113,7 @@ public class TodoController {
                 todoModel.open(file.getPath());
             } catch (IOException e) {
                 Logger.error(e, "Failed to open file");
-                showError("Nem sikerült megnyitni a fájlt.");
+                showError("Failed to open file");
             }
         }
     }
@@ -117,12 +121,16 @@ public class TodoController {
     @FXML
     private void onSave() {
         if (todoModel.getFilePath() != null) {
+            if (!checkForEmptyTasksAndSave()) {
+                return;
+            }
+
             Logger.debug("Saving file");
             try {
                 todoModel.save();
             } catch (IOException e) {
                 Logger.error(e, "Failed to save file");
-                showError("Nem sikerült menteni.");
+                showError("Failed to save file.");
             }
         } else {
             performSaveAs();
@@ -138,20 +146,58 @@ public class TodoController {
         var fileChooser = new FileChooser();
         fileChooser.setTitle("Save Todo List As");
         var file = fileChooser.showSaveDialog(getWindow());
+
         if (file != null) {
+            if (!checkForEmptyTasksAndSave()) {
+                return;
+            }
+
             Logger.debug("Saving file as {}", file);
             try {
                 todoModel.saveAs(file.getPath());
             } catch (IOException e) {
                 Logger.error(e, "Failed to save file");
-                showError("Nem sikerült menteni a fájlt.");
+                showError("Failed to save file");
             }
         }
+    }
+
+    private boolean checkForEmptyTasksAndSave() {
+        boolean hasEmptyTask = false;
+        for (TodoItem item : todoModel.getTasks()) {
+            if (item.getText() == null || item.getText().isBlank()) {
+                hasEmptyTask = true;
+                break;
+            }
+        }
+
+        if (hasEmptyTask) {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle("Empty Tasks Found");
+            alert.setHeaderText("You have empty tasks in your list.");
+            alert.setContentText("Would you like to automatically remove the empty rows before saving?");
+
+            if (alert.showAndWait().get() == ButtonType.OK) {
+                todoModel.getTasks().removeIf(item -> item.getText() == null || item.getText().isBlank());
+                return true;
+            } else {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void showError(String msg) {
         var alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle("Error");
+        alert.setHeaderText(null);
+        alert.setContentText(msg);
+        alert.showAndWait();
+    }
+
+    private void showWarning(String title, String msg) {
+        var alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(msg);
         alert.showAndWait();
