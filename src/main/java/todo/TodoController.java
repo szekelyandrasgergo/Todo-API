@@ -2,6 +2,8 @@ package todo;
 
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
+import javafx.collections.FXCollections;
+import javafx.collections.ListChangeListener;
 import javafx.fxml.FXML;
 import javafx.scene.control.*;
 import javafx.scene.layout.HBox;
@@ -12,6 +14,12 @@ import javafx.stage.Window;
 import org.tinylog.Logger;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 
 public class TodoController {
 
@@ -22,6 +30,8 @@ public class TodoController {
     private VBox tasksContainer;
 
     private final TodoModel todoModel = new TodoModel();
+
+    private final Map<TodoItem, HBox> taskRows = new HashMap<>();
 
     @FXML
     private void initialize() {
@@ -35,12 +45,10 @@ public class TodoController {
                                 .otherwise("")))
         );
 
-        todoModel.tasksProperty().addListener((observable, oldValue, newValue) -> {
-            tasksContainer.getChildren().clear();
-            for (TodoItem item : newValue) {
-                tasksContainer.getChildren().add(createTaskRow(item));
-            }
-        });
+        todoModel.getTasks().addListener(
+                (ListChangeListener<TodoItem>) change -> refreshTasks()
+        );
+
     }
 
     private HBox createTaskRow(TodoItem item) {
@@ -50,9 +58,23 @@ public class TodoController {
         CheckBox checkBox = new CheckBox();
         TextField textField = new TextField();
         Button deleteButton = new Button("🗑");
+        DatePicker datePicker = new DatePicker();
+        TimeSpinner timeSpinner = new TimeSpinner(null);
 
-        deleteButton.setOnAction(event -> {
-            todoModel.getTasks().remove(item);
+        if (item.getDueDateTime() != null) {
+            datePicker.setValue(item.getDueDateTime().toLocalDate());
+            timeSpinner.getValueFactory().setValue(item.getDueDateTime().toLocalTime());
+        }
+
+        datePicker.setDayCellFactory(picker -> new DateCell() {
+            @Override
+            public void updateItem(LocalDate date, boolean empty) {
+                super.updateItem(date, empty);
+                if (date != null && date.isBefore(LocalDate.now())) {
+                    setDisable(true);
+                    setStyle("-fx-background-color: #ffc0cb;");
+                }
+            }
         });
 
         checkBox.selectedProperty().bindBidirectional(item.doneProperty());
@@ -62,7 +84,43 @@ public class TodoController {
                 .then("-fx-strikethrough: true; -fx-text-fill: gray;")
                 .otherwise("-fx-strikethrough: false; -fx-text-fill: black;"));
 
-        row.getChildren().addAll(checkBox, textField, deleteButton);
+        deleteButton.setOnAction(event -> {
+            todoModel.getTasks().remove(item);
+        });
+
+        Runnable updateDueDate = () -> {
+            LocalDate date = datePicker.getValue();
+            LocalTime time = timeSpinner.getValue();
+
+            if (date == null || time == null) {
+                item.setDueDateTime(null);
+                return;
+            }
+
+            LocalDateTime selectedDateTime = LocalDateTime.of(date, time);
+
+            // Ha a kiválasztott időpont a jelenlegi pillanatnál korábbi
+            if (selectedDateTime.isBefore(LocalDateTime.now())) {
+                // Korrigáljuk az aktuális időpontra (vagy visszaállíthatod az előző érvényes értékre is)
+                selectedDateTime = LocalDateTime.now();
+
+                datePicker.setValue(selectedDateTime.toLocalDate());
+                timeSpinner.getValueFactory().setValue(selectedDateTime.toLocalTime());
+            }
+
+            item.setDueDateTime(selectedDateTime);
+        };
+
+        datePicker.valueProperty().addListener((obs, oldVal, newVal) -> updateDueDate.run());
+        timeSpinner.valueProperty().addListener((obs, oldVal, newVal) -> updateDueDate.run());
+
+        timeSpinner.getEditor().focusedProperty().addListener((obs, oldVal, isNowFocused) -> {
+            if (!isNowFocused) {
+                updateDueDate.run();
+            }
+        });
+
+        row.getChildren().addAll(checkBox, textField, datePicker, timeSpinner, deleteButton);
         return row;
     }
 
@@ -120,6 +178,8 @@ public class TodoController {
 
     @FXML
     private void onSave() {
+        tasksContainer.requestFocus();
+
         if (todoModel.getFilePath() != null) {
             if (!checkForEmptyTasksAndSave()) {
                 return;
@@ -128,6 +188,7 @@ public class TodoController {
             Logger.debug("Saving file");
             try {
                 todoModel.save();
+                refreshTasks();
             } catch (IOException e) {
                 Logger.error(e, "Failed to save file");
                 showError("Failed to save file.");
@@ -143,6 +204,7 @@ public class TodoController {
     }
 
     private void performSaveAs() {
+        tasksContainer.requestFocus();
         var fileChooser = new FileChooser();
         fileChooser.setTitle("Save Todo List As");
         var file = fileChooser.showSaveDialog(getWindow());
@@ -155,6 +217,7 @@ public class TodoController {
             Logger.debug("Saving file as {}", file);
             try {
                 todoModel.saveAs(file.getPath());
+                refreshTasks();
             } catch (IOException e) {
                 Logger.error(e, "Failed to save file");
                 showError("Failed to save file");
@@ -205,5 +268,17 @@ public class TodoController {
 
     private Window getWindow() {
         return tasksContainer.getScene().getWindow();
+    }
+
+    private void refreshTasks() {
+        tasksContainer.getChildren().clear();
+        taskRows.clear();
+
+        for (TodoItem item : todoModel.getTasks()) {
+            HBox row = createTaskRow(item);
+
+            taskRows.put(item, row);
+            tasksContainer.getChildren().add(row);
+        }
     }
 }

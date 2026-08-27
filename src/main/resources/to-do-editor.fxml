@@ -35,9 +35,7 @@
         <ScrollPane fitToWidth="true" prefHeight="200.0" prefWidth="200.0" VBox.vgrow="ALWAYS">
             <content>
                 <VBox fx:id="tasksContainer" prefHeight="200.0" prefWidth="100.0">
-               <children>
-                  <HBox alignment="CENTER" prefHeight="30.0" spacing="5.0" />
-               </children></VBox>
+               </VBox>
             </content>
         </ScrollPane>
     </children>
